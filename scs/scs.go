@@ -11,11 +11,15 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/Luzifer/scs-extract/b0rkhash"
 	"github.com/pkg/errors"
+
+	"github.com/Luzifer/scs-extract/b0rkhash"
 )
 
-var rootPathHash = b0rkhash.CityHash64([]byte(""))
+var (
+	localeRootPathHash = b0rkhash.CityHash64([]byte("locale"))
+	rootPathHash       = b0rkhash.CityHash64([]byte(""))
+)
 
 type CatalogEntry struct {
 	HashedPath uint64
@@ -123,6 +127,11 @@ func (r *Reader) populateFileNames() error {
 	for _, e := range r.Files {
 		if e.HashedPath == rootPathHash {
 			entry = e
+			entry.Name = ""
+			break
+		} else if e.HashedPath == localeRootPathHash {
+			entry = e
+			entry.Name = "locale"
 			break
 		}
 	}
@@ -135,8 +144,6 @@ func (r *Reader) populateFileNames() error {
 			entry.Type != EntryTypeUncompressedNamesCopy) {
 		return errors.New("No root path entry found or root path empty")
 	}
-
-	entry.Name = ""
 
 	return r.populateFileTree(entry)
 }
