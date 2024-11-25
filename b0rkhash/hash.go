@@ -1,3 +1,7 @@
+// Package b0rkhash contains a broken implementation of the Google
+// CityHash algorithm to access the SCS archive files of ETS2
+//
+//nolint:mnd
 package b0rkhash
 
 import (
@@ -65,9 +69,9 @@ func hashLen0to16(s []byte, length int) uint64 {
 	}
 
 	if length > 0 {
-		a := uint8(s[0])
-		b := uint8(s[length>>1])
-		c := uint8(s[length-1])
+		a := s[0]
+		b := s[length>>1]
+		c := s[length-1]
 		y := uint32(a) + (uint32(b) << 8)
 		z := uint32(length) + (uint32(c) << 2)
 		return shiftMix(uint64(y)*k2^uint64(z)*k3) * k2
@@ -84,7 +88,7 @@ func hashLen17to32(s []byte, length int) uint64 {
 	c := fetch64(s[length-8:]) * k2
 	d := fetch64(s[length-16:]) * k0
 	return hashLen16(rotate(a-b, 43)+rotate(c, 30)+d,
-		a+rotate(b^k3, 20)-c+uint64(length))
+		a+rotate(b^k3, 20)-c+uint64(length)) //#nosec:G115 // Should never be negative
 }
 
 // Return a 16-byte hash for 48 bytes. Quick and dirty.
@@ -113,7 +117,7 @@ func weakHashLen32WithSeedsByte(s []byte, a, b uint64) Uint128 {
 // Return an 8-byte hash for 33 to 64 bytes.
 func hashLen33to64(s []byte, length int) uint64 {
 	z := fetch64(s[24:])
-	a := fetch64(s) + (uint64(length)+fetch64(s[length-16:]))*k0
+	a := fetch64(s) + (uint64(length)+fetch64(s[length-16:]))*k0 //#nosec:G115 // Should never be negative
 	b := rotate(a+z, 52)
 	c := rotate(a, 37)
 	a += fetch64(s[8:])
@@ -156,8 +160,8 @@ func CityHash64(s []byte) uint64 {
 	x = x*k1 + fetch64(s)
 
 	// Decrease len to the nearest multiple of 64, and operate on 64-byte chunks.
-	tmpLength := uint32(length)
-	tmpLength = uint32(tmpLength-1) & ^uint32(63)
+	tmpLength := uint32(length) //#nosec:G115 // Should never be negative
+	tmpLength -= 1 & ^uint32(63)
 	for {
 		x = rotate(x+y+v.Low64()+fetch64(s[8:]), 37) * k1
 		y = rotate(y+v.High64()+fetch64(s[48:]), 42) * k1

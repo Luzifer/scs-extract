@@ -9,8 +9,10 @@ import (
 	"github.com/Luzifer/go_helpers/v2/str"
 	"github.com/Luzifer/rconfig/v2"
 	"github.com/Luzifer/scs-extract/scs"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
+
+const dirPermissions = 0x750
 
 var (
 	cfg = struct {
@@ -23,24 +25,32 @@ var (
 	version = "dev"
 )
 
-func init() {
-	if err := rconfig.ParseAndValidate(&cfg); err != nil {
-		log.Fatalf("Unable to parse commandline options: %s", err)
+func initApp() (err error) {
+	if err = rconfig.ParseAndValidate(&cfg); err != nil {
+		return fmt.Errorf("parsing CLI options: %w", err)
+	}
+
+	l, err := logrus.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		return fmt.Errorf("parsing log-level: %w", err)
+	}
+	logrus.SetLevel(l)
+
+	return nil
+}
+
+//nolint:gocyclo // simple loop routine, fine to understand
+func main() {
+	var err error
+	if err = initApp(); err != nil {
+		logrus.WithError(err).Fatal("initializing app")
 	}
 
 	if cfg.VersionAndExit {
-		fmt.Printf("scs-extract %s\n", version)
+		fmt.Printf("scs-extract %s\n", version) //nolint:forbidigo
 		os.Exit(0)
 	}
 
-	if l, err := log.ParseLevel(cfg.LogLevel); err != nil {
-		log.WithError(err).Fatal("Unable to parse log level")
-	} else {
-		log.SetLevel(l)
-	}
-}
-
-func main() {
 	var (
 		archive string
 		extract []string
@@ -49,9 +59,9 @@ func main() {
 	switch len(rconfig.Args()) {
 	case 1:
 		// No positional arguments
-		log.Fatal("No SCS archive given")
+		logrus.Fatal("no SCS archive given")
 
-	case 2:
+	case 2: //nolint:mnd
 		archive = rconfig.Args()[1]
 
 	default:
@@ -59,32 +69,32 @@ func main() {
 		extract = rconfig.Args()[2:]
 	}
 
-	f, err := os.Open(archive)
+	f, err := os.Open(archive) //#nosec:G304 // Intended to open arbitrary files
 	if err != nil {
-		log.WithError(err).Fatal("Unable to open input file")
+		logrus.WithError(err).Fatal("opening input file")
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // will be closed by program exit
 
-	r, err := scs.NewReader(f, 0)
+	r, err := scs.NewReader(f)
 	if err != nil {
-		log.WithError(err).Fatal("Unable to read SCS file headers")
+		logrus.WithError(err).Fatal("reading SCS file headers")
 	}
 
-	log.WithField("no_files", len(r.Files)).Debug("Opened archive")
+	logrus.WithField("no_files", len(r.Files)).Debug("opened archive")
 
 	destInfo, err := os.Stat(cfg.Dest)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.WithError(err).Fatal("Unable to access destination")
+			logrus.WithError(err).Fatal("accessing destination")
 		}
 
-		if err := os.MkdirAll(cfg.Dest, 0755); err != nil {
-			log.WithError(err).Fatal("Unable to create destination directory")
+		if err := os.MkdirAll(cfg.Dest, dirPermissions); err != nil {
+			logrus.WithError(err).Fatal("creating destination directory")
 		}
 	}
 
 	if destInfo != nil && !destInfo.IsDir() {
-		log.Fatal("Destination exists and is no directory")
+		logrus.Fatal("destination exists and is no directory")
 	}
 
 	for _, file := range r.Files {
@@ -93,40 +103,39 @@ func main() {
 			continue
 		}
 
-		if file.Type == scs.EntryTypeCompressedNames || file.Type == scs.EntryTypeCompressedNamesCopy ||
-			file.Type == scs.EntryTypeUncompressedNames || file.Type == scs.EntryTypeUncompressedNamesCopy {
+		if file.IsDirectory {
 			// Don't care about directories, if they contain files they will be created
 			continue
 		}
 
 		if !cfg.Extract {
 			// Not asked to extract, do not extract
-			fmt.Println(file.Name)
+			fmt.Println(file.Name) //nolint:forbidigo // Intended to print file list
 			continue
 		}
 
 		destPath := path.Join(cfg.Dest, file.Name)
-		if err := os.MkdirAll(path.Dir(destPath), 0755); err != nil {
-			log.WithError(err).Fatal("Unable to create directory")
+		if err := os.MkdirAll(path.Dir(destPath), dirPermissions); err != nil {
+			logrus.WithError(err).Fatal("creating directory")
 		}
 
 		src, err := file.Open()
 		if err != nil {
-			log.WithError(err).Fatal("Unable to open file from archive")
+			logrus.WithError(err).Fatal("opening file from archive")
 		}
 
-		dest, err := os.Create(destPath)
+		dest, err := os.Create(destPath) //#nosec:G304 // Intended to create files at given location
 		if err != nil {
-			log.WithError(err).Fatal("Unable to create destination file")
+			logrus.WithError(err).Fatal("creating destination file")
 		}
 
 		if _, err = io.Copy(dest, src); err != nil {
-			log.WithError(err).Fatal("Unable to write file contents")
+			logrus.WithError(err).WithField("name", file.Name).Fatal("Unable to write file contents")
 		}
 
-		dest.Close()
-		src.Close()
+		dest.Close() //nolint:errcheck,gosec,revive // Will be closed by program exit
+		src.Close()  //nolint:errcheck,gosec // Will be closed by program exit
 
-		log.WithField("file", file.Name).Info("File extracted")
+		logrus.WithField("file", file.Name).Info("File extracted")
 	}
 }
