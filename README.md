@@ -1,8 +1,5 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/Luzifer/scs-extract)](https://goreportcard.com/report/github.com/Luzifer/scs-extract)
-![](https://badges.fyi/github/license/Luzifer/scs-extract)
-![](https://badges.fyi/github/downloads/Luzifer/scs-extract)
-![](https://badges.fyi/github/latest-release/Luzifer/scs-extract)
-![](https://knut.in/project-status/scs-extract)
+![](https://img.shields.io/github/license/Luzifer/scs-extract)
+![](https://img.shields.io/maintenance/yes/2024)
 
 # Luzifer / scs-extract
 
