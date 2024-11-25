@@ -161,7 +161,7 @@ func CityHash64(s []byte) uint64 {
 
 	// Decrease len to the nearest multiple of 64, and operate on 64-byte chunks.
 	tmpLength := uint32(length) //#nosec:G115 // Should never be negative
-	tmpLength -= 1 & ^uint32(63)
+	tmpLength = (tmpLength - 1) & ^uint32(63)
 	for {
 		x = rotate(x+y+v.Low64()+fetch64(s[8:]), 37) * k1
 		y = rotate(y+v.High64()+fetch64(s[48:]), 42) * k1
